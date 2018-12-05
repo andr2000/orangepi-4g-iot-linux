@@ -41,7 +41,9 @@
 
 
 #include "f_fs.c"
+#ifdef CONFIG_USB_AUDIO
 #include "f_audio_source.c"
+#endif
 #ifdef CONFIG_SND_RAWMIDI
 #include "f_midi.c"
 #endif
@@ -1676,6 +1678,7 @@ static struct android_usb_function accessory_function = {
 	.ctrlrequest	= accessory_function_ctrlrequest,
 };
 
+#ifdef CONFIG_SND
 static int audio_source_function_init(struct android_usb_function *f,
 			struct usb_composite_dev *cdev)
 {
@@ -1737,6 +1740,7 @@ static struct android_usb_function audio_source_function = {
 	.unbind_config	= audio_source_function_unbind_config,
 	.attributes	= audio_source_function_attributes,
 };
+#endif
 
 #ifndef CONFIG_MTK_ECCCI_C2K
 #ifdef CONFIG_MTK_C2K_SUPPORT
@@ -1888,7 +1892,9 @@ static struct android_usb_function *supported_functions[] = {
 	&rndis_function,
 	&mass_storage_function,
 	&accessory_function,
+#ifdef CONFIG_SND
 	&audio_source_function,
+#endif
 #ifdef CONFIG_SND_RAWMIDI
 	&midi_function,
 #endif

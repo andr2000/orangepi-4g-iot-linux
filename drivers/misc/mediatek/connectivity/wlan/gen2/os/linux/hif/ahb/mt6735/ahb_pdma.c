@@ -38,7 +38,7 @@
 #include <linux/jiffies.h>	/* jiffies */
 #include <linux/delay.h>	/* udelay and mdelay macro */
 
-#if CONFIG_ANDROID
+#ifdef CONFIG_ANDROID
 #include <linux/wakelock.h>
 #endif
 

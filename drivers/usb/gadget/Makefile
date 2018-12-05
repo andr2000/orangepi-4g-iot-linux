@@ -60,7 +60,7 @@ obj-$(CONFIG_USB_F_LOOPBACK)	+= usb_f_loopback.o
 # USB gadget drivers
 #
 g_zero-y			:= zero.o
-g_audio-y			:= audio.o
+g_audio-$(CONFIG_USB_AUDIO)	:= audio.o
 g_ether-y			:= ether.o
 g_serial-y			:= serial.o
 g_midi-y			:= gmidi.o

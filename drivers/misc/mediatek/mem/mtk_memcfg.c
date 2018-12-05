@@ -383,7 +383,9 @@ static int dt_scan_memory(unsigned long node, const char *uname,
 	struct mem_desc *mem_desc;
 	struct mblock_info *mblock_info;
 	const __be32 *reg, *endp;
+#ifdef CONFIG_MTK_FB
 	u64 fb_base = 0x12345678, fb_size = 0;
+#endif
 
 	/* We are scanning "memory" nodes only */
 	if (type == NULL) {
@@ -484,6 +486,7 @@ static int dt_scan_memory(unsigned long node, const char *uname,
 		dram_sz += mem_desc->size;
 	}
 
+#ifdef CONFIG_MTK_FB
 	/* frame buffer */
 	fb_size = (u64)mtkfb_get_fb_size();
 	fb_base = (u64)mtkfb_get_fb_base();
@@ -497,6 +500,7 @@ static int dt_scan_memory(unsigned long node, const char *uname,
 			(unsigned long long)fb_base,
 			(unsigned long long)fb_base + fb_size - 1,
 			(unsigned long long)fb_size);
+#endif
 
 	return node;
 }

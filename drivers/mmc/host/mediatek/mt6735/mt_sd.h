@@ -9,6 +9,8 @@
 #include <linux/pm.h>
 #include <linux/mmc/sdio_func.h>
 
+#include <linux/semaphore.h>
+
 /* weiping fix */
 #if !defined(CONFIG_MTK_CLKMGR)
 #include <linux/clk.h>
