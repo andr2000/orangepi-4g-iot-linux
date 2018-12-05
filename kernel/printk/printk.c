@@ -506,29 +506,9 @@ static int log_store(int facility, int level,
 	struct printk_log *msg;
 	u32 size, pad_len;
 	u16 trunc_msg_len = 0;
-	int this_cpu = smp_processor_id();
-	char state = __raw_get_cpu_var(printk_state);
-	char tbuf[50];
-	unsigned tlen;
-
-#if defined(CONFIG_MT_ENG_BUILD) && defined(CONFIG_LOG_TOO_MUCH_WARNING)
-	struct printk_log *first_msg;
-	static u64 t_base;
-
-#endif
-	if (state == 0) {
-		__raw_get_cpu_var(printk_state) = ' ';
-		state = ' ';
-	}
-
-	if (console_suspended == 0)
-		tlen = snprintf(tbuf, sizeof(tbuf), "%c(%x)[%d:%s]", state, this_cpu, current->pid, current->comm);
-	else
-		tlen = snprintf(tbuf, sizeof(tbuf), "%c%x)", state, this_cpu);
-
 
 	/* number of '\0' padding bytes to next message */
-	size = msg_used_size(text_len + tlen, dict_len, &pad_len);
+	size = msg_used_size(text_len, dict_len, &pad_len);
 
 	if (log_make_free_space(size)) {
 		/* truncate the message if it is too long for empty buffer */
@@ -551,12 +531,7 @@ static int log_store(int facility, int level,
 
 	/* fill message */
 	msg = (struct printk_log *)(log_buf + log_next_idx);
-	memcpy(log_text(msg), tbuf, tlen);
-	if (tlen + text_len > LOG_LINE_MAX)
-		text_len = LOG_LINE_MAX - tlen;
-
-	memcpy(log_text(msg) + tlen, text, text_len);
-	text_len += tlen;
+	memcpy(log_text(msg), text, text_len);
 	msg->text_len = text_len;
 	if (trunc_msg_len) {
 		memcpy(log_text(msg) + text_len, trunc_msg, trunc_msg_len);
@@ -578,28 +553,6 @@ static int log_store(int facility, int level,
 	log_next_idx += msg->len;
 	log_next_seq++;
 
-	/* printk too much detect */
-#if defined(CONFIG_MT_ENG_BUILD) && defined(CONFIG_LOG_TOO_MUCH_WARNING)
-	if (printk_too_much_enable == 1) {
-		if (detect_count_change) {
-			detect_count_change = false;
-			t_base = msg->ts_nsec + DETECT_TIME*15;
-		}
-		if (flag_toomuch == false && t_base < msg->ts_nsec) {
-			first_msg = (struct printk_log *)(log_buf + log_first_idx);
-			delta_time = msg->ts_nsec - first_msg->ts_nsec;
-			delta_count = log_next_seq - log_first_seq;
-			if (delta_count * DETECT_TIME >  detect_count * delta_time) {
-				if (0 == parse_log_file()) {
-					t_base = msg->ts_nsec + DELAY_TIME;
-					flag_toomuch = true;
-				}
-			}
-		}
-
-	}
-
-#endif
 	return msg->text_len;
 }
 
@@ -981,7 +934,12 @@ static void __init log_buf_len_update(unsigned size)
 /* save requested log_buf_len since it's too early to process it */
 static int __init log_buf_len_setup(char *str)
 {
-	unsigned size = memparse(str, &str);
+	unsigned int size;
+
+	if (!str)
+		return -EINVAL;
+
+	size = memparse(str, &str);
 
 	log_buf_len_update(size);
 
@@ -1174,14 +1132,6 @@ static size_t print_prefix(const struct printk_log *msg, bool syslog, char *buf)
 	}
 
 	len += print_time(msg->ts_nsec, buf ? buf + len : NULL);
-
-	if (syslog == false && printk_disable_uart == false) {
-		if (buf)
-			len += sprintf(buf+len, "<%d>", smp_processor_id());
-		else
-			len += snprintf(NULL, 0, "<%d>", smp_processor_id());
-	}
-
 	return len;
 }
 
@@ -1243,17 +1193,12 @@ static size_t msg_print_text(const struct printk_log *msg, enum log_flags prev,
 
 	return len;
 }
+
 static int syslog_print(char __user *buf, int size)
 {
 	char *text;
 	struct printk_log *msg;
 	int len = 0;
-	char addinfo_buf[150];
-	char *addinfo = addinfo_buf;
-	int add_len = 0;
-	static int pre_pid = -1;
-	int current_pid = current->pid;
-	unsigned long long over_gap = 0;
 
 	text = kmalloc(LOG_LINE_MAX + PREFIX_MAX, GFP_KERNEL);
 	if (!text)
@@ -1262,24 +1207,14 @@ static int syslog_print(char __user *buf, int size)
 	while (size > 0) {
 		size_t n;
 		size_t skip;
-		add_len = 0;
 
 		raw_spin_lock_irq(&logbuf_lock);
-		/* exist uread log overflow  */
-		if (overflow_info_flag == true) {
-			add_len += scnprintf(addinfo, 150, "<%s gap: %llu>\n", KERNEL_LOG_OVERFLOW, overflow_gap);
-			overflow_info_flag = false;
-		}
 		if (syslog_seq < log_first_seq) {
 			/* messages are gone, move to first one */
-			over_gap = log_first_seq - syslog_seq;
 			syslog_seq = log_first_seq;
 			syslog_idx = log_first_idx;
 			syslog_prev = 0;
 			syslog_partial = 0;
-			if (add_len >= 0 && add_len < 150)
-				add_len += scnprintf(addinfo + add_len, 150 - add_len, "< %s gap: %llu >\n", KERNEL_LOG_OVERFLOW, over_gap);
-
 		}
 		if (syslog_seq == log_next_seq) {
 			raw_spin_unlock_irq(&logbuf_lock);
@@ -1317,27 +1252,6 @@ static int syslog_print(char __user *buf, int size)
 		len += n;
 		size -= n;
 		buf += n;
-
-		if (syslog_partial == 0) {
-			if (-1 == pre_pid) {
-				pre_pid = current_pid;
-			} else if (current_pid != pre_pid) {
-				if (add_len >= 0 && add_len < 150)
-					add_len += scnprintf(addinfo + add_len, 150 - add_len, "<%d -> %d>\n", pre_pid, current_pid);
-				pre_pid = current_pid;
-			}
-
-			if (add_len > 0 && (size + 1 - add_len) >= 0) {
-				if (copy_to_user(buf - 1, addinfo_buf, add_len)) {
-					if (!len)
-						len = -EFAULT;
-					break;
-				}
-				len += add_len - 1;
-				size -= add_len - 1;
-				buf += add_len - 1;
-			}
-		}
 	}
 
 	kfree(text);
@@ -1523,13 +1437,10 @@ int do_syslog(int type, char __user *buf, int len, bool from_file)
 		raw_spin_lock_irq(&logbuf_lock);
 		if (syslog_seq < log_first_seq) {
 			/* messages are gone, move to first one */
-			/* calculate the gap */
-			overflow_gap = log_first_seq - syslog_seq;
 			syslog_seq = log_first_seq;
 			syslog_idx = log_first_idx;
 			syslog_prev = 0;
 			syslog_partial = 0;
-			overflow_info_flag = true;
 		}
 		if (from_file) {
 			/*
@@ -1590,8 +1501,6 @@ static void call_console_drivers(int level, const char *text, size_t len)
 		return;
 
 	for_each_console(con) {
-		if (printk_disable_uart && (con->flags & CON_CONSDEV))
-			continue;
 		if (exclusive_console && con != exclusive_console)
 			continue;
 		if (!(con->flags & CON_ENABLED))
@@ -2272,8 +2181,7 @@ static int console_cpu_notify(struct notifier_block *self,
 	case CPU_DEAD:
 	case CPU_DOWN_FAILED:
 	case CPU_UP_CANCELED:
-		/*console_lock(); */
-		if (console_trylock())
+		console_lock();
 			console_unlock();
 	}
 	return NOTIFY_OK;
