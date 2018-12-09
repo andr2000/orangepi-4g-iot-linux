@@ -37,6 +37,7 @@
 #include "mt_spm_idle.h"
 
 #define IDLE_TAG     "[Power/swap]"
+#ifdef CONFIG_DEBUG
 #define idle_warn(fmt, args...)		pr_warn(IDLE_TAG fmt, ##args)
 #define idle_dbg(fmt, args...)		pr_debug(IDLE_TAG fmt, ##args)
 
@@ -44,6 +45,12 @@
 	if (dpidle_dump_log == DEEPIDLE_LOG_FULL) \
 		pr_warn(IDLE_TAG fmt, ##args); \
 	}
+#else
+#define idle_warn(fmt, args...)
+#define idle_dbg(fmt, args...)
+
+#define idle_warn_log(fmt, args...)
+#endif
 
 #define idle_gpt GPT4
 

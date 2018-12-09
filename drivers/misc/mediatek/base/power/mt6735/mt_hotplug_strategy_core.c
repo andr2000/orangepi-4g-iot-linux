@@ -53,7 +53,9 @@ static long int hps_get_current_time_ms(void)
  */
 static int _hps_task_main(void *data)
 {
+#ifdef CONFIG_DEBUG
 	int cnt = 0;
+#endif
 	void (*algo_func_ptr)(void);
 
 	hps_ctxt_print_basic(1);

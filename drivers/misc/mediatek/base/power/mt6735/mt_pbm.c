@@ -39,6 +39,7 @@
 
 static bool mt_pbm_debug;
 
+#ifdef CONFIG_DEBUG
 #define pbm_emerg(fmt, args...)	pr_emerg(fmt, ##args)
 #define pbm_alert(fmt, args...)	pr_alert(fmt, ##args)
 #define pbm_crit(fmt, args...)	pr_crit(fmt, ##args)
@@ -52,6 +53,17 @@ static bool mt_pbm_debug;
 		if (mt_pbm_debug)		\
 			pr_crit(fmt, ##args);	\
 	} while (0)
+#else
+#define pbm_emerg(fmt, args...)
+#define pbm_alert(fmt, args...)
+#define pbm_crit(fmt, args...)
+#define pbm_err(fmt, args...)
+#define pbm_warn(fmt, args...)
+#define pbm_notice(fmt, args...)
+#define pbm_info(fmt, args...)
+
+#define pbm_debug(fmt, args...)
+#endif
 
 #define BIT_CHECK(a, b) ((a) & (1<<(b)))
 
@@ -110,7 +122,9 @@ unsigned int ma_to_mw(unsigned int val)
 
 void dump_kicker_info(void)
 {
+#ifdef CONFIG_DEBUG
 	struct hpf *hpfmgr = &hpf_ctrl;
+#endif
 
 #if 1
 	pbm_debug("(M/F/G)=%d,%d,%d;(C/G)=%ld,%ld\n",
